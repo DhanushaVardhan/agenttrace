@@ -29,7 +29,19 @@ for _d in (INDEX_DIR, UPLOAD_DIR, SAMPLES_DIR):
 # --- models ----------------------------------------------------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-004")
+
+# text-embedding-004 was retired and now 404s on embedContent. gemini-embedding-001
+# replaces it. Note that batchEmbedContents still works for it even though the
+# model's supportedGenerationMethods does not advertise the method.
+EMBED_MODEL = os.getenv("EMBED_MODEL", "gemini-embedding-001")
+
+# gemini-embedding-001 returns 3072 dimensions by default. It is trained with
+# Matryoshka representation learning, so a 768-dimension truncation keeps
+# almost all of the retrieval quality at a quarter of the memory - which
+# matters on a 512 MB free instance. Google returns UNNORMALISED vectors for
+# any dimension other than 3072, so normalising is mandatory here rather than
+# merely convenient; store.normalize() does it on every insert and query.
+EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
 GEMINI_BASE_URL = os.getenv(
     "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
 )

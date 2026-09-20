@@ -25,7 +25,7 @@ flowchart LR
     subgraph Ingestion
         A[PDF upload] --> B[pypdf<br/>text per page]
         B --> C[chunk 800 / overlap 150<br/>page number attached]
-        C --> D[Gemini text-embedding-004<br/>batches of 100]
+        C --> D[Gemini gemini-embedding-001<br/>768-dim, batches of 100]
         D --> E[(FAISS IndexFlatIP<br/>L2-normalised = cosine)]
     end
 
@@ -134,7 +134,7 @@ Free instances sleep after 15 minutes of inactivity and take about a minute to w
 
 **`IndexFlatIP`, not HNSW or IVF.** Flat search is exhaustive, so recall is exactly 1.0. At a few thousand chunks a brute-force dot product is sub-millisecond; approximate indexes only start paying for themselves somewhere north of a million vectors, and below that they trade away recall for speed you do not need.
 
-**Inner product on normalised vectors.** After L2 normalisation, inner product _is_ cosine similarity — the right metric for text, where direction carries the meaning and magnitude does not.
+**Inner product on normalised vectors.** After L2 normalisation, inner product _is_ cosine similarity — the right metric for text, where direction carries the meaning and magnitude does not. Normalisation is not optional here: `gemini-embedding-001` is Matryoshka-trained and returns unnormalised vectors at any output dimension other than its native 3072, and this project truncates to 768 to keep the index small enough for a 512 MB instance.
 
 **API embeddings, not local `sentence-transformers`.** A local model pulls roughly 800 MB of PyTorch into the image and turns every cold start into a problem on a free tier. The trade-off is a network dependency and per-call latency, and for a genuinely sensitive corpus it would flip the other way, because API embeddings mean the text leaves the machine.
 

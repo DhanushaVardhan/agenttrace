@@ -200,6 +200,7 @@ async def embed_texts(
                     "model": model_path,
                     "content": {"parts": [{"text": t}]},
                     "taskType": task_type,
+                    "outputDimensionality": config.EMBED_DIM,
                 }
                 for t in batch
             ]
