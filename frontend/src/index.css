@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-slate-200 font-sans antialiased;
+  }
+
+  /* Slim scrollbars so the two scrolling panels do not dominate the layout. */
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-600 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-500;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-400/70 ring-offset-2 ring-offset-ink-950;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-ink-900 border border-ink-700 rounded-xl;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2
+           text-sm font-medium transition-colors disabled:opacity-40
+           disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-indigo-500 text-white hover:bg-indigo-400;
+  }
+
+  .btn-ghost {
+    @apply btn border border-ink-600 text-slate-300 hover:bg-ink-800 hover:text-slate-100;
+  }
+}
