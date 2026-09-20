@@ -36,6 +36,10 @@ class FunctionCall:
     name: str
     args: dict[str, Any]
     call_id: str
+    # Newer Gemini models return their own call id. When present it must be
+    # echoed back on the matching functionResponse, so it is kept separately
+    # from call_id, which exists only to pair a call with its result in the UI.
+    provider_id: str | None = None
 
 
 @dataclass
@@ -155,13 +159,15 @@ async def generate(
             text_fragments.append(part["text"])
         fc = part.get("functionCall")
         if fc:
+            provider_id = fc.get("id")
             calls.append(
                 FunctionCall(
                     name=fc.get("name", ""),
                     args=dict(fc.get("args") or {}),
-                    # Gemini does not issue tool-call ids, so we mint a stable
-                    # one per turn for the UI to pair call with result.
-                    call_id=f"c{len(calls) + 1}_{idx}",
+                    # Older models issue no id, so mint a stable one per turn
+                    # for the UI to pair a call with its result.
+                    call_id=provider_id or f"c{len(calls) + 1}_{idx}",
+                    provider_id=provider_id,
                 )
             )
 

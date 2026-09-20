@@ -28,7 +28,11 @@ for _d in (INDEX_DIR, UPLOAD_DIR, SAMPLES_DIR):
 
 # --- models ----------------------------------------------------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+# gemini-2.0-flash and gemini-2.5-flash have both been retired and now 404.
+# gemini-3.6-flash is the current free-tier flash model with function calling.
+# The "-latest" aliases track the newest model automatically but returned 503
+# under load while testing, so this pins a specific version instead.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 # text-embedding-004 was retired and now 404s on embedContent. gemini-embedding-001
 # replaces it. Note that batchEmbedContents still works for it even though the

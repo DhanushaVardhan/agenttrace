@@ -144,13 +144,16 @@ def _model_payload(name: str, result: Any) -> dict[str, Any]:
 
 
 def _parts_for_history(response: llm.LLMResponse) -> list[dict[str, Any]]:
-    """Rebuild the model turn exactly as it came back, calls included."""
-    parts: list[dict[str, Any]] = []
-    if response.text:
-        parts.append({"text": response.text})
-    for call in response.function_calls:
-        parts.append({"functionCall": {"name": call.name, "args": call.args}})
-    return parts or [{"text": ""}]
+    """Echo the model turn back verbatim.
+
+    Deliberately the raw parts rather than a reconstruction. Reasoning models
+    attach a `thoughtSignature` to their functionCall parts and expect it back
+    on the next turn; rebuilding the part from just {name, args} drops that
+    signature along with the call's own `id`, which degrades or breaks
+    multi-step tool use. Passing through exactly what arrived cannot go stale
+    as providers add fields.
+    """
+    return response.raw_parts or [{"text": ""}]
 
 
 # --------------------------------------------------------------------------
@@ -233,14 +236,14 @@ async def run_agent(session_id: str, user_message: str) -> AsyncGenerator[Event,
                     duration_ms=duration_ms,
                 )
 
-                response_parts.append(
-                    {
-                        "functionResponse": {
-                            "name": call.name,
-                            "response": payload,
-                        }
-                    }
-                )
+                function_response: dict[str, Any] = {
+                    "name": call.name,
+                    "response": payload,
+                }
+                # Models that issue call ids match the response back by id.
+                if call.provider_id:
+                    function_response["id"] = call.provider_id
+                response_parts.append({"functionResponse": function_response})
 
             contents.append({"role": "user", "parts": response_parts})
 

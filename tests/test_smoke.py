@@ -165,11 +165,39 @@ def test_agent_loop_chains_tools_and_emits_a_trace(monkeypatch, seeded_store):
         [
             LLMResponse(
                 text="First I need the threshold from the documents.",
-                function_calls=[FunctionCall("search_documents", {"query": "CDD threshold"}, "c1")],
+                function_calls=[
+                    FunctionCall("search_documents", {"query": "CDD threshold"}, "c1", "call_1")
+                ],
+                # Real providers attach extra fields (ids, thought signatures);
+                # raw_parts is what gets echoed back, so the test carries them.
+                raw_parts=[
+                    {"text": "First I need the threshold from the documents."},
+                    {
+                        "functionCall": {
+                            "name": "search_documents",
+                            "args": {"query": "CDD threshold"},
+                            "id": "call_1",
+                        },
+                        "thoughtSignature": "sig-abc",
+                    },
+                ],
             ),
             LLMResponse(
                 text="Now I multiply it by 40.",
-                function_calls=[FunctionCall("calculate", {"expression": "50000 * 40"}, "c2")],
+                function_calls=[
+                    FunctionCall("calculate", {"expression": "50000 * 40"}, "c2", "call_2")
+                ],
+                raw_parts=[
+                    {"text": "Now I multiply it by 40."},
+                    {
+                        "functionCall": {
+                            "name": "calculate",
+                            "args": {"expression": "50000 * 40"},
+                            "id": "call_2",
+                        },
+                        "thoughtSignature": "sig-def",
+                    },
+                ],
             ),
             LLMResponse(
                 text="The threshold is Rs 50,000 [rbi_kyc.pdf, p.3]; 40 such "
