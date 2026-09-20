@@ -2,13 +2,13 @@
 
 **Agentic RAG over PDFs, with the agent's reasoning streamed to the browser step by step.**
 
-🔗 **Live demo:** _paste your Hugging Face Space URL here_ · 📦 **Corpus:** AML / KYC regulatory documents
+🔗 **Live demo:** _paste your deployed URL here_ · 📦 **Corpus:** AML / KYC regulatory documents
 
-<!-- Record a ~15s GIF of the acceptance-test query and save it as docs/demo.gif.
-     It is the highest-leverage thing in this repo: most people will watch it
-     and read nothing else. ScreenToGif (Windows) or Kap (macOS). -->
-
-![AgentTrace demo — the trace timeline building live](docs/demo.gif)
+> **Demo GIF pending.** Record a ~15 second capture of the acceptance-test query,
+> save it as `docs/demo.gif`, and replace this block with the line below —
+> see [docs/RECORDING_THE_DEMO.md](docs/RECORDING_THE_DEMO.md).
+>
+> `![AgentTrace demo](docs/demo.gif)`
 
 ---
 
@@ -111,14 +111,22 @@ python scripts/make_samples.py                          # regenerate the synthet
 
 ### Deployment
 
-One container, one URL. A multi-stage build compiles the React app in `node:20-alpine`, then copies only `dist/` into a `python:3.11-slim` runtime that serves it from FastAPI. Splitting the frontend and backend across two hosts would double the failure surface and buy nothing but a CORS configuration.
+One container, one URL. A multi-stage build compiles the React app in `node:20-slim`, then copies only `dist/` into a `python:3.11-slim` runtime that serves it from FastAPI. Splitting the frontend and backend across two hosts would double the failure surface and buy nothing but a CORS configuration.
 
 ```bash
 docker build -t agenttrace .
 docker run -p 7860:7860 -e GEMINI_API_KEY=... agenttrace
 ```
 
-On Hugging Face Spaces, pick the **Docker** SDK and set `GEMINI_API_KEY` as a Space secret. `python scripts/deploy_hf.py --space <user>/<space>` does the upload without needing git or Docker installed locally.
+The container reads its port from `$PORT`, defaulting to 7860, so it runs unmodified on Render, Railway, Cloud Run or any other platform that injects one. Set `GEMINI_API_KEY` in the host's environment or secret store.
+
+`scripts/deploy_render.py` deploys to Render's free tier straight from the public repo — no Docker or git needed locally, because Render builds the image server side:
+
+```bash
+python scripts/deploy_render.py --token rnd_... --repo https://github.com/<user>/agenttrace --gemini-key ...
+```
+
+Free instances sleep after 15 minutes of inactivity and take about a minute to wake, so the first request to a cold service is slow. `scripts/deploy_hf.py` automates the Hugging Face Spaces path instead, but note that Docker Spaces now require a paid HF plan.
 
 ---
 
@@ -168,7 +176,7 @@ agenttrace/
 │   ├── components/      UploadPanel · ChatPanel · TraceTimeline · TraceStep · CitationChip
 │   └── hooks/useAgentStream.js
 ├── data/samples/        3 synthetic AML/KYC PDFs
-├── scripts/             make_samples.py · fetch_samples.py · deploy_hf.py
+├── scripts/             make_samples.py · fetch_samples.py · deploy_render.py · deploy_hf.py
 ├── tests/test_smoke.py
 └── Dockerfile
 ```

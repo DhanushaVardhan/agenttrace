@@ -13,3 +13,5 @@ data/uploads
 docs
 tests
 README.md
+_setup
+_manifest.json

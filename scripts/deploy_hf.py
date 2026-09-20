@@ -32,10 +32,15 @@ short_description: Agentic RAG over PDFs with a live, step-by-step reasoning tra
 """
 
 # Everything that is not needed to build the image server side.
+# A Space is public: anything uploaded here is world-readable, so local-only
+# helper scripts (which may hold tokens) are excluded explicitly rather than
+# relying on .gitignore, which upload_folder does not read.
 IGNORE = [
     ".git*",
     ".env",
     ".env.*",
+    "_setup/**",
+    "_manifest.json",
     "**/node_modules/**",
     "frontend/dist/**",
     "backend/static/**",

@@ -1,7 +1,12 @@
 # --------------------------------------------------------------------------
 # Stage 1 - build the React app
 # --------------------------------------------------------------------------
-FROM node:20-alpine AS frontend
+# Debian rather than Alpine on purpose: Rollup 4 ships its native binary as a
+# platform-specific optional dependency, and npm resolves the musl variant
+# unreliably without a lockfile, which fails the build with
+# "Cannot find module @rollup/rollup-linux-x64-musl". This stage is discarded
+# anyway, so its size does not reach the runtime image.
+FROM node:20-slim AS frontend
 
 WORKDIR /app/frontend
 COPY frontend/package.json ./
@@ -48,4 +53,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # One worker on purpose: the document registry and FAISS index live in this
 # process's memory, so a second worker would serve a different corpus.
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+#
+# The port is read from the environment: Hugging Face expects 7860, while
+# Render, Railway and Cloud Run inject their own PORT and will not route
+# traffic to a container that ignores it. `exec` replaces the shell so uvicorn
+# becomes PID 1 and still receives SIGTERM on shutdown.
+CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]
