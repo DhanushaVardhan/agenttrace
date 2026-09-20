@@ -37,7 +37,9 @@ Rules, in order of importance:
 4. Use the calculate tool for ALL arithmetic, including simple multiplication. Do not compute in your head.
 5. If the documents do not contain the answer, say so plainly: "The indexed documents do not cover this." Do not fill the gap from general knowledge. Guessing is worse than an unhelpful answer in a compliance setting.
 6. Before each tool call, state in one short sentence what you are looking for and why. These notes are shown to the user as the reasoning trace, so keep them concrete.
-7. When you have enough information, stop calling tools and write the final answer. Be direct and specific; quote exact thresholds, dates and defined terms."""
+7. When you have enough information, stop calling tools and write the final answer. Be direct and specific; quote exact thresholds, dates and defined terms.
+
+Formatting of the final answer: write plain prose in short paragraphs. Do NOT use markdown headings (#, ##, ###), tables, or LaTeX/MathJax of any kind - write "40 x Rs 50,000 = Rs 20,00,000", never "$$40 \\times ...$$". You may use **bold** sparingly for a key figure and "- " for a short list. The answer is rendered in a chat panel, not a markdown viewer."""
 
 # [rbi_kyc.pdf, p.14] / [rbi_kyc.pdf p. 14] / [rbi_kyc.pdf,p14]
 _CITATION_RE = re.compile(r"\[\s*([^\[\],]+?)\s*,?\s*p\.?\s*(\d+)\s*\]", re.IGNORECASE)

@@ -28,47 +28,182 @@ function buildSourceMap(steps) {
   return map
 }
 
-/** Split the answer on [filename, p.N] markers and render them as chips. */
-function renderAnswer(text, sourceMap) {
+/**
+ * Strip the LaTeX the model reaches for when it does arithmetic.
+ *
+ * The system prompt asks it not to, but a model under instruction pressure
+ * still emits `$$40 \times \text{Rs } 50,000$$` often enough that rendering
+ * it raw would be the first thing anyone notices in the demo. Belt and braces.
+ */
+const LATEX_COMMAND = /\\(?:mathbf|mathrm|text|textbf|textit|mathit|operatorname)\{([^{}]*)\}/g
+
+function deLatex(text) {
+  let out = text
+    .replace(/\$\$([\s\S]*?)\$\$/g, '$1')
+    .replace(/\\\(|\\\)|\\\[|\\\]/g, '')
+    .replace(/\$([^$\n]+)\$/g, '$1')
+
+  // These commands nest -- \mathbf{\text{Rs } 50,000} is what the model
+  // actually produced. A single pass unwraps only the innermost brace pair and
+  // leaves \mathbf{...} behind, so unwrap repeatedly until it stops changing.
+  for (let i = 0; i < 5; i += 1) {
+    const next = out.replace(LATEX_COMMAND, '$1')
+    if (next === out) break
+    out = next
+  }
+
+  return out
+    .replace(/\\times/g, '×')
+    .replace(/\\approx/g, '≈')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\%/g, '%')
+    .replace(/\\,|\\;|\\!/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+}
+
+// One pass over citations, **bold** and `code`.
+const INLINE_RE = /(\[\s*[^[\],]+?\s*,?\s*p\.?\s*\d+\s*\])|(\*\*[^*\n]+\*\*)|(`[^`\n]+`)/g
+
+function renderInline(text, sourceMap, keyPrefix) {
   const nodes = []
   let lastIndex = 0
   let match
   let key = 0
 
-  CITATION_RE.lastIndex = 0
-  while ((match = CITATION_RE.exec(text)) !== null) {
+  INLINE_RE.lastIndex = 0
+  while ((match = INLINE_RE.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(<span key={`t${key++}`}>{text.slice(lastIndex, match.index)}</span>)
+      nodes.push(<span key={`${keyPrefix}t${key++}`}>{text.slice(lastIndex, match.index)}</span>)
     }
-    const filename = match[1].trim()
-    const page = Number(match[2])
-    nodes.push(
-      <CitationChip
-        key={`c${key++}`}
-        filename={filename}
-        page={page}
-        snippet={sourceMap.get(`${filename.toLowerCase()}|${page}`)}
-      />,
-    )
-    lastIndex = match.index + match[0].length
+    const [token, citation, bold, code] = match
+
+    if (citation) {
+      CITATION_RE.lastIndex = 0
+      const parts = CITATION_RE.exec(citation)
+      if (parts) {
+        const filename = parts[1].trim()
+        const page = Number(parts[2])
+        nodes.push(
+          <CitationChip
+            key={`${keyPrefix}c${key++}`}
+            filename={filename}
+            page={page}
+            snippet={sourceMap.get(`${filename.toLowerCase()}|${page}`)}
+          />,
+        )
+      } else {
+        nodes.push(<span key={`${keyPrefix}t${key++}`}>{token}</span>)
+      }
+    } else if (bold) {
+      nodes.push(
+        <strong key={`${keyPrefix}b${key++}`} className="font-semibold text-slate-100">
+          {bold.slice(2, -2)}
+        </strong>,
+      )
+    } else if (code) {
+      nodes.push(
+        <code
+          key={`${keyPrefix}k${key++}`}
+          className="rounded bg-ink-950/80 px-1 py-[1px] font-mono text-[12px] text-indigo-200"
+        >
+          {code.slice(1, -1)}
+        </code>,
+      )
+    }
+    lastIndex = match.index + token.length
   }
   if (lastIndex < text.length) {
-    nodes.push(<span key={`t${key++}`}>{text.slice(lastIndex)}</span>)
+    nodes.push(<span key={`${keyPrefix}t${key++}`}>{text.slice(lastIndex)}</span>)
   }
   return nodes
 }
 
+/** Minimal block renderer: headings collapse to bold lines, lists to <li>. */
 function Answer({ text, steps }) {
   const sourceMap = buildSourceMap(steps)
-  const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim())
+  const lines = deLatex(text).split('\n')
+
+  const blocks = []
+  let paragraph = []
+  let list = null
+
+  const flushParagraph = () => {
+    if (paragraph.length) {
+      blocks.push({ kind: 'p', text: paragraph.join(' ') })
+      paragraph = []
+    }
+  }
+  const flushList = () => {
+    if (list) {
+      blocks.push(list)
+      list = null
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) {
+      flushParagraph()
+      flushList()
+      continue
+    }
+
+    const heading = line.match(/^#{1,6}\s+(.*)$/)
+    const bullet = line.match(/^[-*]\s+(.*)$/)
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/)
+
+    if (heading) {
+      flushParagraph()
+      flushList()
+      blocks.push({ kind: 'h', text: heading[1].replace(/\*\*/g, '') })
+    } else if (bullet || numbered) {
+      flushParagraph()
+      const item = (bullet || numbered)[1]
+      if (!list) list = { kind: 'ul', items: [] }
+      list.items.push(item)
+    } else {
+      flushList()
+      paragraph.push(line)
+    }
+  }
+  flushParagraph()
+  flushList()
 
   return (
     <div className="rounded-xl border border-ink-700 bg-ink-900/40 px-4 py-3.5">
-      {paragraphs.map((paragraph, i) => (
-        <p key={i} className="mb-2.5 text-[13.5px] leading-[1.7] text-slate-200 last:mb-0">
-          {renderAnswer(paragraph, sourceMap)}
-        </p>
-      ))}
+      {blocks.map((block, i) => {
+        if (block.kind === 'h') {
+          return (
+            <p
+              key={i}
+              className="mb-1.5 mt-3 text-[13px] font-semibold text-slate-100 first:mt-0"
+            >
+              {renderInline(block.text, sourceMap, `h${i}-`)}
+            </p>
+          )
+        }
+        if (block.kind === 'ul') {
+          return (
+            <ul key={i} className="mb-2.5 space-y-1 last:mb-0">
+              {block.items.map((item, j) => (
+                <li
+                  key={j}
+                  className="relative pl-4 text-[13.5px] leading-[1.7] text-slate-200
+                             before:absolute before:left-1 before:top-[0.65em]
+                             before:h-1 before:w-1 before:rounded-full before:bg-slate-500"
+                >
+                  {renderInline(item, sourceMap, `l${i}-${j}-`)}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={i} className="mb-2.5 text-[13.5px] leading-[1.7] text-slate-200 last:mb-0">
+            {renderInline(block.text, sourceMap, `p${i}-`)}
+          </p>
+        )
+      })}
     </div>
   )
 }
