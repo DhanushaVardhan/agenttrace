@@ -1,0 +1,16 @@
+# Pinned for reproducible Docker builds.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# PDF text extraction: pure Python, no system libraries to install.
+pypdf==5.1.0
+
+# Vector search. Flat inner-product index over normalised embeddings.
+faiss-cpu==1.9.0.post1
+numpy==1.26.4
+
+# Gemini is called over plain REST, so no provider SDK is needed.
+httpx==0.28.1
+pydantic==2.10.4
+python-dotenv==1.0.1
