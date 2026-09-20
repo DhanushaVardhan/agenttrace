@@ -24,6 +24,7 @@ log = logging.getLogger("agenttrace.llm")
 
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 4
+_MAX_RETRY_SLEEP = 45.0
 _TIMEOUT = httpx.Timeout(60.0, connect=15.0)
 
 
@@ -78,6 +79,32 @@ async def aclose() -> None:
     _client = None
 
 
+def _retry_after(response: httpx.Response) -> float | None:
+    """Seconds the server asked us to wait, from Retry-After or RetryInfo.
+
+    Gemini returns quota errors as
+      {"error": {"details": [{"@type": ".../RetryInfo", "retryDelay": "27s"}]}}
+    """
+    header = response.headers.get("retry-after")
+    if header:
+        try:
+            return float(header)
+        except ValueError:
+            pass
+    try:
+        details = (response.json().get("error") or {}).get("details") or []
+    except Exception:  # noqa: BLE001 - a malformed body is not worth raising on
+        return None
+    for detail in details:
+        raw = detail.get("retryDelay")
+        if isinstance(raw, str) and raw.endswith("s"):
+            try:
+                return float(raw[:-1])
+            except ValueError:
+                continue
+    return None
+
+
 async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
     """POST with exponential backoff on the retryable status codes.
 
@@ -106,11 +133,19 @@ async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
             if resp.status_code not in _RETRY_STATUSES:
                 # 400/403/404 will not get better by trying again.
                 raise LLMError(last_detail)
-            log.warning("gemini %s (attempt %d)", last_detail, attempt + 1)
+            # A 429 carries the server's own RetryInfo. Honouring it beats
+            # blind exponential backoff: a per-minute quota needs ~60s, and
+            # doubling from 1s gives up after about 7.
+            server_delay = _retry_after(resp)
+            if server_delay is not None:
+                delay = min(max(delay, server_delay), _MAX_RETRY_SLEEP)
+            log.warning(
+                "gemini %s (attempt %d, sleeping %.0fs)", last_detail, attempt + 1, delay
+            )
 
         if attempt < _MAX_RETRIES - 1:
             await asyncio.sleep(delay)
-            delay *= 2
+            delay = min(delay * 2, _MAX_RETRY_SLEEP)
 
     raise LLMError(f"Gemini request failed after {_MAX_RETRIES} attempts. {last_detail}")
 

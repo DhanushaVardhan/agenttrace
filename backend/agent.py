@@ -145,6 +145,28 @@ def _model_payload(name: str, result: Any) -> dict[str, Any]:
     return {"result": result}
 
 
+def _friendly_error(detail: str) -> str:
+    """Turn a provider error into something a visitor can act on.
+
+    A public demo on a free API key will hit quota limits, and a raw 400-line
+    JSON dump in a red card helps nobody.
+    """
+    if "429" in detail or "quota" in detail.lower():
+        return (
+            "The Gemini free-tier quota is exhausted, so the agent could not finish "
+            "this run. Free quotas refill on a rolling window - wait a minute and ask "
+            "again, or run it locally with your own API key."
+        )
+    if "404" in detail and "model" in detail.lower():
+        return (
+            "The configured model is no longer available from Google. Set GEMINI_MODEL "
+            "to a current one - the API's models endpoint lists what your key can use."
+        )
+    if "503" in detail:
+        return "The model is overloaded right now. Wait a few seconds and ask again."
+    return detail
+
+
 def _parts_for_history(response: llm.LLMResponse) -> list[dict[str, Any]]:
     """Echo the model turn back verbatim.
 
@@ -263,7 +285,7 @@ async def run_agent(session_id: str, user_message: str) -> AsyncGenerator[Event,
 
     except llm.LLMError as exc:
         log.warning("llm failure: %s", exc)
-        yield Event(type="error", message=str(exc))
+        yield Event(type="error", message=_friendly_error(str(exc)))
         yield Event(
             type="done",
             steps=steps_used,

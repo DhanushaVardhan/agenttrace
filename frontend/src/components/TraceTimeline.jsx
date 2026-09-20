@@ -13,6 +13,11 @@ export default function TraceTimeline({ steps, running, stepCount, elapsedMs, tr
   const toolCalls = steps.filter((s) => s.type === 'tool_call').length
   const current = running ? Math.max(1, toolCalls) : stepCount || toolCalls
 
+  // A run that died on a provider error also arrives with truncated: true, but
+  // saying "stopped at the step limit" would be a lie -- the error card above
+  // already explains what happened.
+  const failed = steps.some((s) => s.type === 'error')
+
   return (
     <section className="rounded-xl border border-ink-700 bg-ink-900/70">
       <header className="flex items-center gap-3 border-b border-ink-700 px-3.5 py-2">
@@ -50,7 +55,7 @@ export default function TraceTimeline({ steps, running, stepCount, elapsedMs, tr
           <p className="px-1 py-2 text-[12.5px] text-slate-500">Planning the first step…</p>
         )}
 
-        {truncated && !running && (
+        {truncated && !running && !failed && (
           <p className="px-1 pt-1 text-[11.5px] text-amber-400/90">
             Stopped at the {MAX_STEPS}-step limit — the answer below is partial.
           </p>
