@@ -1,8 +1,10 @@
-"""Four smoke tests covering the parts that would silently break.
+"""Smoke tests covering the parts that would silently break.
 
 Deliberately not a full suite. These cover the logic where a regression would
 be invisible until a demo: chunk/page mapping, the security boundary on
-calculate, SSE frame integrity, and the shape of an agent run.
+calculate, SSE frame integrity, the shape of an agent run, and that the app
+imports at all -- the last one was added after a response-model bug built
+cleanly and then killed the container on boot.
 
     pytest -q
 """
@@ -245,3 +247,29 @@ def test_tool_failure_does_not_kill_the_run(monkeypatch, seeded_store):
     assert "error" in result.result
     assert events[-1].type == "done"
     assert any(e.type == "answer" for e in events)
+
+
+# --------------------------------------------------------------------------
+# 5. the app actually imports  --  regression guard
+# --------------------------------------------------------------------------
+
+
+def test_app_imports_and_registers_its_routes():
+    """FastAPI validates every route's response model at import time.
+
+    This exists because it did not: `spa()` was annotated
+    `-> FileResponse | JSONResponse`, and because a types.UnionType is not a
+    `type`, FastAPI's `lenient_issubclass(annotation, Response)` check returned
+    False and it tried to build a Pydantic field from the union. The container
+    built fine and then died on boot with FastAPIError. Importing the app in a
+    test turns that into a red test instead of a failed deploy.
+    """
+    pytest.importorskip("fastapi", reason="fastapi is not installed in this environment")
+    from backend.main import app
+
+    paths = {route.path for route in app.routes}
+    for expected in ("/api/health", "/api/documents", "/api/upload", "/api/chat"):
+        assert expected in paths
+
+    catch_all = next(r for r in app.routes if r.path == "/{full_path:path}")
+    assert getattr(catch_all, "response_model", None) is None

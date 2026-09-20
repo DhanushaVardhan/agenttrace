@@ -15,7 +15,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import agent, config, llm
@@ -186,8 +186,14 @@ if (_STATIC / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=_STATIC / "assets"), name="assets")
 
 
-@app.get("/{full_path:path}", include_in_schema=False)
-async def spa(full_path: str) -> FileResponse | JSONResponse:
+# response_model=None and a plain Response annotation are both load-bearing.
+# FastAPI infers the response model from the return annotation and only skips
+# it when `lenient_issubclass(annotation, Response)` holds. A union such as
+# `FileResponse | JSONResponse` is a types.UnionType, not a type, so that check
+# returns False and FastAPI tries to build a Pydantic field out of it --
+# raising FastAPIError at import time, before the server ever starts.
+@app.get("/{full_path:path}", include_in_schema=False, response_model=None)
+async def spa(full_path: str) -> Response:
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found.")
 
